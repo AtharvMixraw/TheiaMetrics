@@ -1,0 +1,48 @@
+cd ~/VideoMetrics
+cat > .gitignore << 'EOF'
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+
+# Data files (too large for git)
+data/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Results (generated files)
+results/
+*.csv
+*.png
+*.jpg
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.log
+*.tmp
+.cache/
+
+# OS files
+Thumbs.db
+EOF
+
+echo "✓ .gitignore created"
