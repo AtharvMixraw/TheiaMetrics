@@ -2,7 +2,7 @@
 
 A professional toolkit for analyzing video compression quality. Automatically compress videos at multiple bitrates, measure quality degradation using industry-standard metrics, and visualize differences with interactive heatmaps.
 
-<video controls src="data/demo.mp4" title="Title"></video>
+<video controls src="demo/demo.mp4" title="Title"></video>
 
 ## Features
 
@@ -349,26 +349,6 @@ Contributions are welcome. Please:
 ## License
 
 MIT License. See LICENSE file for details.
-
-## Citation
-
-If you use this tool in your research, please cite:
-
-```bibtex
-@software{video_quality_dashboard,
-  title={Video Quality Dashboard},
-  author={Your Name},
-  year={2024},
-  url={https://github.com/yourusername/video-quality-dashboard}
-}
-```
-
-## Support
-
-For issues and questions:
-- GitHub Issues: [repository URL]
-- Documentation: [wiki URL]
-- Email: [your email]
 
 ## Acknowledgments
 
