@@ -8,7 +8,7 @@ set -e
 # Detect if virtual environment should be used
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -d "$PROJECT_ROOT/venv" ] && [ -z "$VIRTUAL_ENV" ]; then
-    echo "📦 Detected virtual environment, activating..."
+    echo "Detected virtual environment, activating..."
     source "$PROJECT_ROOT/venv/bin/activate"
     VENV_ACTIVATED=1
 fi
@@ -58,11 +58,21 @@ echo "Compressed dir: $COMPRESSED_DIR"
 echo "Output CSV: $OUTPUT_CSV"
 echo ""
 
+# Test metrics binary first
+echo "Testing metrics binary..."
+if ! timeout 5 $METRICS_BIN 2>&1 | grep -q "Usage"; then
+    echo "Error: Metrics binary is not responding correctly"
+    echo "Try rebuilding: cd ../build && make clean && make"
+    exit 1
+fi
+echo "Metrics binary OK"
+echo ""
+
 # Write CSV header
 echo "filename,bitrate_kbps,file_size_mb,psnr_db,ssim" > "$OUTPUT_CSV"
 
-# Get original file size for comparison
-ORIGINAL_SIZE=$(stat -f%z "$ORIGINAL_VIDEO" 2>/dev/null || stat -c%s "$ORIGINAL_VIDEO" 2>/dev/null)
+# Get original file size
+ORIGINAL_SIZE=$(stat -c%s "$ORIGINAL_VIDEO" 2>/dev/null || stat -f%z "$ORIGINAL_VIDEO" 2>/dev/null)
 ORIGINAL_SIZE_MB=$(echo "scale=2; $ORIGINAL_SIZE / 1024 / 1024" | bc)
 
 echo "Original file size: ${ORIGINAL_SIZE_MB} MB"
@@ -72,6 +82,7 @@ echo ""
 
 # Counter for processed files
 COUNT=0
+FAILED=0
 
 # Process each compressed video
 for compressed_video in "$COMPRESSED_DIR"/*.mp4; do
@@ -81,16 +92,16 @@ for compressed_video in "$COMPRESSED_DIR"/*.mp4; do
     
     FILENAME=$(basename "$compressed_video")
     
-    # Extract bitrate from filename (e.g., output_500k.mp4 -> 500)
+    # Extract bitrate from filename
     BITRATE=$(echo "$FILENAME" | grep -oE '[0-9]+' | head -1)
     
     if [ -z "$BITRATE" ]; then
-        echo "⚠ Warning: Could not extract bitrate from $FILENAME, skipping..."
+        echo "Warning: Could not extract bitrate from $FILENAME, skipping..."
         continue
     fi
     
     # Get file size
-    FILE_SIZE=$(stat -f%z "$compressed_video" 2>/dev/null || stat -c%s "$compressed_video" 2>/dev/null)
+    FILE_SIZE=$(stat -c%s "$compressed_video" 2>/dev/null || stat -f%z "$compressed_video" 2>/dev/null)
     FILE_SIZE_MB=$(echo "scale=2; $FILE_SIZE / 1024 / 1024" | bc)
     
     # Calculate compression ratio
@@ -101,40 +112,66 @@ for compressed_video in "$COMPRESSED_DIR"/*.mp4; do
     echo "Bitrate: ${BITRATE}k"
     echo "Size: ${FILE_SIZE_MB} MB (${COMPRESSION_RATIO}% reduction)"
     
-    # Run metrics calculation
+    # Run metrics calculation with timeout
     echo "Calculating metrics..."
-    METRICS_OUTPUT=$($METRICS_BIN "$ORIGINAL_VIDEO" "$compressed_video" 2>/dev/null)
     
-    # Extract PSNR and SSIM from output
-    PSNR=$(echo "$METRICS_OUTPUT" | grep "Average PSNR:" | grep -oE '[0-9]+\.[0-9]+')
-    SSIM=$(echo "$METRICS_OUTPUT" | grep "Average SSIM:" | grep -oE '[0-9]+\.[0-9]+')
-    
-    if [ -z "$PSNR" ] || [ -z "$SSIM" ]; then
-        echo "✗ Error: Failed to extract metrics"
-        continue
+    # Use timeout to prevent hanging (300 seconds = 5 minutes)
+    TEMP_OUTPUT=$(mktemp)
+    if timeout 300 $METRICS_BIN "$ORIGINAL_VIDEO" "$compressed_video" > "$TEMP_OUTPUT" 2>&1; then
+        METRICS_OUTPUT=$(cat "$TEMP_OUTPUT")
+        
+        # Extract PSNR and SSIM from output
+        PSNR=$(echo "$METRICS_OUTPUT" | grep "Average PSNR:" | grep -oE '[0-9]+\.[0-9]+')
+        SSIM=$(echo "$METRICS_OUTPUT" | grep "Average SSIM:" | grep -oE '[0-9]+\.[0-9]+')
+        
+        if [ -n "$PSNR" ] && [ -n "$SSIM" ]; then
+            echo "PSNR: ${PSNR} dB"
+            echo "SSIM: ${SSIM}"
+            
+            # Append to CSV
+            echo "$FILENAME,$BITRATE,$FILE_SIZE_MB,$PSNR,$SSIM" >> "$OUTPUT_CSV"
+            
+            COUNT=$((COUNT + 1))
+            echo "Processed successfully"
+        else
+            echo "Error: Could not extract metrics from output"
+            echo "Output was:"
+            cat "$TEMP_OUTPUT"
+            FAILED=$((FAILED + 1))
+        fi
+    else
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -eq 124 ]; then
+            echo "Error: Metrics calculation timed out (> 5 minutes)"
+        else
+            echo "Error: Metrics calculation failed with exit code $EXIT_CODE"
+        fi
+        echo "Output:"
+        cat "$TEMP_OUTPUT"
+        FAILED=$((FAILED + 1))
     fi
     
-    echo "PSNR: ${PSNR} dB"
-    echo "SSIM: ${SSIM}"
-    
-    # Append to CSV
-    echo "$FILENAME,$BITRATE,$FILE_SIZE_MB,$PSNR,$SSIM" >> "$OUTPUT_CSV"
-    
-    COUNT=$((COUNT + 1))
-    echo "✓ Processed successfully"
+    rm -f "$TEMP_OUTPUT"
     echo ""
 done
 
 echo "========================================="
-echo "Evaluation Complete!"
+echo "Evaluation Complete"
 echo "========================================="
-echo "Processed $COUNT videos"
+echo "Processed: $COUNT videos"
+echo "Failed: $FAILED videos"
 echo "Results saved to: $OUTPUT_CSV"
 echo ""
-echo "Summary:"
-cat "$OUTPUT_CSV"
-echo ""
-echo "To visualize results, you can:"
-echo "  - Open $OUTPUT_CSV in Excel/LibreOffice"
-echo "  - Use Python/R for plotting"
-echo "  - Run generate_report.py (if available)"
+
+if [ $COUNT -gt 0 ]; then
+    echo "Summary:"
+    cat "$OUTPUT_CSV"
+    echo ""
+    echo "Next steps:"
+    echo "  - View CSV: cat $OUTPUT_CSV"
+    echo "  - Generate graphs: ./generate_report.py $OUTPUT_CSV ../results/graphs"
+    echo "  - Visual inspection: vqcompare <bitrate>"
+else
+    echo "No videos were processed successfully."
+    echo "Check the error messages above."
+fi

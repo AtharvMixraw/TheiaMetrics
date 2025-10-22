@@ -2,8 +2,7 @@
 
 A professional toolkit for analyzing video compression quality. Automatically compress videos at multiple bitrates, measure quality degradation using industry-standard metrics, and visualize differences with interactive heatmaps.
 
-<video controls src="demo/demo.mp4" title="Title"></video>
-
+![alt text](Screenshot.png)
 ## Features
 
 ### Automated Compression Testing
