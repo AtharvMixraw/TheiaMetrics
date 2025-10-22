@@ -1,8 +1,8 @@
 # TheiaMetrics
 
 A professional toolkit for analyzing video compression quality. Automatically compress videos at multiple bitrates, measure quality degradation using industry-standard metrics, and visualize differences with interactive heatmaps.
+<img width="960" height="479" alt="Screenshot 2025-10-06 203534" src="https://github.com/user-attachments/assets/f2d99130-8cc5-4746-b615-6ab853e9855b" />
 
-![alt text](Screenshot.png)
 ## Features
 
 ### Automated Compression Testing
